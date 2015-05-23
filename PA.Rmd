@@ -1,0 +1,118 @@
+---
+title: "Practical Machine Learning Project"
+output:
+  html_document:
+    keep_md: yes
+---
+
+Overview
+--------
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.
+
+```{r libs, echo = FALSE, message = FALSE, warning = FALSE}
+library(caret)
+library(randomForest)
+set.seed(777)
+```
+
+Data Processing
+---------------
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+if (!file.exists("./data")) {
+  dir.create("./data")
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/pml-training.csv", method = "curl")
+  download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', destfile = "./data/pml-testing.csv", method = "curl")
+}
+
+pmlTraining <- read.csv('./data/pml-training.csv', na.strings = c("NA", "", " ", "#DIV/0!"))
+pmlTesting <- read.csv('./data/pml-testing.csv', na.strings = c("NA", "", " ", "#DIV/0!"))
+```
+
+Exploratory analysis & Feature Reduction
+----------------------------------------
+
+Training dataset contains 19622 observations of 160 variables.
+
+```{r}
+dim(pmlTraining)
+```
+
+Remove all empty and NA columns. Now we have 60 variables.
+
+```{r}
+pmlTraining <- Filter(function (x) {
+  !all(is.na(x) || x == '')
+}, pmlTraining)
+dim(pmlTraining)
+```
+
+Remove unnecessary columns (case num, username, timestamps, time windows). Finally we have 53 variables.
+```{r}
+pmlTraining <- pmlTraining[,-(1:7)]
+names(pmlTraining)
+```
+
+
+Model training
+--------------
+
+Split data into training and cross validation sets:
+
+```{r}
+inTrain <- createDataPartition(pmlTraining$classe, p = .6, list = FALSE)
+trainSet <- pmlTraining[inTrain,]
+testSet <- pmlTraining[-inTrain,]
+```
+
+Use Random Forest for model training:
+
+```{r model, cache = TRUE, warning = FALSE}
+trCtrl <- trainControl(method = "cv", number = 5)
+model <- train(classe ~ ., method = "rf", data = trainSet, preProcess = "pca", ntree = 100, trControl = trCtrl)
+model
+```
+
+Cross Validation
+----------------
+
+Let's validate model on the cross validation set. We achieved 96.6% accuracy.
+
+```{r}
+pr <- predict(model, testSet);
+confusionMatrix(pr, testSet$classe)
+```
+
+Results
+-------
+
+Apply model to the test set and submit results to Coursera. Total Score is 19 / 20 (95% accurancy).
+
+```{r}
+answers <- predict(model, pmlTesting)
+
+if (!file.exists("./answers")) {
+  dir.create("./answers")
+}
+
+pml_write_files = function(x) {
+  n = length(x)
+  for (i in 1:n) {
+    filename = paste0("./answers/problem_id_", i, ".txt")
+    write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+answers
+```
